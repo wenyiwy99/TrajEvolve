@@ -1,0 +1,126 @@
+# Configuration for ALFWorld Inference
+# This config file is designed for inference only, reusing components from ppo_trainer.yaml
+
+# Inference-specific settings
+inference:
+  num_rollouts: 4  # Number of rollout rounds per task (可配置参数)
+  output_dir: ${oc.env:HOME}/inference_results
+  n_gpus_per_node: 8
+  nnodes: 1
+
+# Model configuration
+model:
+  path: Qwen/Qwen2.5-7B-Instruct  # Model path (可配置参数)
+  use_shm: False
+  external_lib: null
+  override_config: { }
+  enable_gradient_checkpointing: False  # Not needed for inference
+  enable_activation_offload: False
+  use_remove_padding: True
+  lora_rank: 0
+  lora_alpha: 16
+  target_modules: all-linear
+  use_liger: False
+  use_fused_kernels: False
+  trust_remote_code: False
+  strategy: fsdp  # GPU distribution strategy
+
+# Rollout configuration - same as main_ppo.py for consistency
+rollout:
+  name: vllm
+  mode: sync  # sync: LLM, async: AsyncLLM
+  chat_scheduler: null
+  temperature: 0.4
+  top_k: -1
+  top_p: 1.0
+  do_sample: True
+  prompt_length: 2048
+  response_length: 512
+  # VLLM specific settings
+  dtype: bfloat16
+  gpu_memory_utilization: 0.6
+  ignore_eos: False
+  enforce_eager: False
+  free_cache_engine: False
+  load_format: dummy_dtensor
+  layered_summon: False
+  tensor_model_parallel_size: 2
+  max_num_batched_tokens: 8192
+  max_model_len: null
+  max_num_seqs: 1024
+  log_prob_micro_batch_size_per_gpu: 32
+  disable_log_stats: True
+  enable_chunked_prefill: False
+  # Validation-specific settings
+  val_kwargs:
+    top_k: -1
+    top_p: 1.0
+    temperature: 0.4
+    do_sample: True
+  engine_kwargs:
+    vllm:
+      swap_space: null
+
+# Data configuration - same as main_ppo.py
+data:
+  tokenizer: null
+  use_shm: False
+  train_files: ${oc.env:HOME}/data/verl-agent/text/train.parquet
+  val_files: ${oc.env:HOME}/data/verl-agent/text/test.parquet
+  prompt_key: prompt
+  reward_fn_key: data_source
+  max_prompt_length: 2048
+  max_response_length: 512
+  train_batch_size: 16
+  val_batch_size: 128
+  return_raw_input_ids: False
+  return_raw_chat: True
+  return_full_prompt: False
+  shuffle: False  # No shuffle for inference
+  filter_overlong_prompts: True
+  filter_overlong_prompts_workers: 1
+  truncation: error
+  image_key: images
+  video_key: videos
+  trust_remote_code: False
+  apply_chat_template_kwargs: {}
+  custom_cls:
+    path: null
+    name: null
+
+# Environment configuration - same as main_ppo.py
+env:
+  env_name: alfworld/AlfredTWEnv
+  seed: 0
+  max_steps: 30
+  history_length: 2
+  resources_per_worker:
+    num_cpus: 0.8
+    num_gpus: 0
+  rollout:
+    n: 8  # Group size for environments
+  alfworld:
+    eval_dataset: eval_in_distribution
+    validate_both_datasets: false
+
+# Algorithm configuration (minimal, not used for inference but needed for compatibility)
+algorithm:
+  gamma: 1.0
+  lam: 1.0
+  adv_estimator: grpo
+  norm_adv_by_std_in_grpo: True
+  use_kl_in_reward: False
+  kl_penalty: kl
+  kl_ctrl:
+    type: fixed
+    kl_coef: 0.001
+    horizon: 10000
+    target_kl: 0.1
+  filter_groups:
+    enable: False
+    max_num_gen_batches: 10
+
+# Ray initialization
+ray_init:
+  num_cpus: null  # Use all available CPUs
+

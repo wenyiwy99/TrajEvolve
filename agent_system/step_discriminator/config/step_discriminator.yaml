@@ -1,0 +1,113 @@
+# Step Discriminator Configuration
+# This configuration file is used by collector.py for integrated trajectory collection + credit analysis
+
+# Model configuration
+model:
+  path: Qwen/Qwen2.5-7B-Instruct  # Path to the model
+  strategy: fsdp  # Model strategy (fsdp or megatron)
+  enable_gradient_checkpointing: false
+  use_shm: false
+
+# Inference configuration
+inference:
+  # Number of GPUs per node
+  n_gpus_per_node: 8
+  # Number of nodes
+  nnodes: 1
+  # Total epochs to run
+  total_epochs: 1
+  # Directory for logging the rollout data
+  rollout_data_dir: ${oc.env:HOME}/trajevolve/credit_analysis_data
+
+# Environment configuration
+env:
+  env_name: alfworld/AlfredTWEnv
+  seed: 0
+  max_steps: 30
+  history_length: 2
+  resources_per_worker:
+    num_cpus: 0.8
+    num_gpus: 0
+  rollout:
+    n: 4  # Number of rollouts per prompt (controls multi-rollout for GRPO)
+    temperature: 0.8
+  alfworld:
+    eval_dataset: eval_in_distribution
+
+# Data configuration
+data:
+  train_batch_size: 16
+  train_files: ${oc.env:HOME}/data/verl-agent/text/train.parquet
+  trust_remote_code: true
+  max_prompt_length: 2048
+  truncation: error
+  return_raw_chat: true  # Required for rollout_loop to access raw_prompt
+
+# Rollout configuration (passed to fsdp_workers and vllm_rollout)
+rollout:
+  # Required by fsdp_workers.py
+  name: vllm
+  mode: sync  # sync: LLM, async: AsyncLLM
+  n: 1  # Must be 1 for verl+env scenario (multi-rollout controlled by env.rollout.n)
+  temperature: 0.8
+  tensor_model_parallel_size: 1
+  log_prob_micro_batch_size: null  # will be deprecated, use log_prob_micro_batch_size_per_gpu
+  log_prob_micro_batch_size_per_gpu: 32
+  log_prob_use_dynamic_bsz: false
+  log_prob_max_token_len_per_gpu: 16384
+  load_format: dummy_dtensor
+  # Required by vllm_rollout.py
+  prompt_length: 2048
+  response_length: 512
+  gpu_memory_utilization: 0.8
+  dtype: bfloat16
+  enforce_eager: true
+  free_cache_engine: true
+  max_model_len: null
+  max_num_batched_tokens: 8192
+  disable_log_stats: true
+  enable_chunked_prefill: true
+
+# Actor configuration
+actor:
+  strategy: ${model.strategy}
+  ppo_mini_batch_size: 256
+  ppo_micro_batch_size: null
+  ppo_micro_batch_size_per_gpu: 16
+  use_dynamic_bsz: false
+  ppo_max_token_len_per_gpu: 16384
+  grad_clip: 1.0
+  clip_ratio: 0.2
+  entropy_coeff: 0.001
+  use_kl_loss: false
+  ppo_epochs: 1
+  shuffle: false
+  ulysses_sequence_parallel_size: 1
+  optim:
+    lr: 1e-6
+    total_training_steps: 1
+    weight_decay: 0.01
+  checkpoint:
+    contents: ['model', 'optimizer', 'extra']
+  fsdp_config:
+    wrap_policy:
+      min_num_params: 0
+    param_offload: false
+    reshard_after_forward: true
+    fsdp_size: -1
+
+# Reference model configuration
+ref:
+  strategy: ${model.strategy}
+  fsdp_config:
+    param_offload: false
+    reshard_after_forward: true
+    wrap_policy:
+      min_num_params: 0
+  log_prob_micro_batch_size: null
+  log_prob_micro_batch_size_per_gpu: 32
+  ulysses_sequence_parallel_size: 1
+
+# Ray initialization
+ray_init:
+  num_cpus: null
